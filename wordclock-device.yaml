@@ -35,4 +35,4 @@ packages:
     url: https://github.com/Wob76/Word-Clock-ESPHome
     ref: main                         # or a tag/commit to pin a version
     files: [wordclock.yaml]
-    refresh: 1d                       # how often ESPHome re-checks GitHub for updates
+    refresh: 0s                       # check GitHub for updates on every config load

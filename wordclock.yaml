@@ -50,7 +50,7 @@ external_components:
       url: https://github.com/Wob76/Word-Clock-ESPHome
       ref: main
     components: [wordclock]
-    refresh: 1d
+    refresh: 0s
 
 wordclock:
 
