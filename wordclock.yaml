@@ -112,7 +112,7 @@ light:
     pin: ${led_pin}
     num_leds: 132
     chipset: WS2812
-    rgb_order: GRB
+    channel_colors: GRB
     default_transition_length: 0s
     gamma_correct: 1.0       # the Pi code writes raw RGB (e.g. Fire applies its own gamma) - keep it linear
     restore_mode: RESTORE_DEFAULT_ON
@@ -728,7 +728,7 @@ interval:
       - lambda: |-
           std::string cur = id(matrix).get_effect_name();
           int g = wc::note_mode(cur);
-          if (g >= 0 && id(group_sel).state != wc::GROUP_NAMES[g]) id(group_sel).publish_state(std::string(wc::GROUP_NAMES[g]));
+          if (g >= 0 && id(group_sel).current_option() != wc::GROUP_NAMES[g]) id(group_sel).publish_state(std::string(wc::GROUP_NAMES[g]));
           if (!id(slideshow).state || !id(matrix).remote_values.is_on()) { id(slide_elapsed) = 0; return; }
           if (++id(slide_elapsed) < (int) id(slide_interval).state) return;
           id(slide_elapsed) = 0;

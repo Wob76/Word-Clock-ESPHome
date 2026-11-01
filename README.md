@@ -25,8 +25,8 @@ ESPHome fetches `wordclock.yaml` and `components/wordclock` from the repository;
 
 Copy [`wordclock.yaml`](wordclock.yaml) instead and edit it directly. It still fetches the C++ from this repo through `external_components`.
 Because it is also the remotely fetched package, its credentials are substitutions rather than `!secret` lookups; when using it as a standalone
-config, add `api_key`, `ota_password`, `wifi_ssid`, `wifi_password` and `ap_password` under `substitutions:` and set each to its corresponding
-`!secret` value.
+config, add `api_key`, `ota_password`, `wifi_ssid`, `wifi_password` and `ap_password` under `substitutions:` and map them to `api_encryption_key`,
+`ota_password`, `wifi_ssid`, `wifi_password` and `fallback_ap_password` from your `secrets.yaml` with `!secret`.
 
 Both configs select `variant: esp32s3` and ESP-IDF, which is the recommended ESPHome configuration for the ESP32-S3 SuperMini. The external LED data
 pin remains GPIO13; change `led_pin` in your local substitutions if your wiring uses another pin.
