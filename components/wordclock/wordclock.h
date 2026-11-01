@@ -278,7 +278,7 @@ template<typename L> void draw_heart(L &it, uint32_t elapsed_ms) {
 // ---------------------------------------------- groups / modes (Pi controller) --
 // Names are the effect names in wordclock.yaml (= NAME in each Pi module).
 // "Heart" is the hourly GIF of the original ESP32 build, now a regular animation.
-constexpr const char *GROUP_NAMES[] = {"Current", "Animations"};
+constexpr const char *GROUP_NAMES[] = {"Info", "Animations"};
 constexpr int GROUP_COUNT = 2;
 constexpr const char *G_CURRENT[] = {"Word Clock", "Weather", "Presence"};
 constexpr const char *G_ANIMS[] = {"Matrix Rain", "Ripple", "Fire",         "Plasma",    "Sand",      "Lava Lamp",

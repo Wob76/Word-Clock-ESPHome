@@ -1064,8 +1064,15 @@ inline bool *presence_home() {
   static bool home[PRESENCE_COUNT] = {};
   return home;
 }
+inline bool *presence_enabled() {
+  static bool enabled[PRESENCE_COUNT] = {true, true, true, true};
+  return enabled;
+}
 inline void presence_set(int i, bool home) {
   if (i >= 0 && i < PRESENCE_COUNT) presence_home()[i] = home;
+}
+inline void presence_enable(int i, bool enabled) {
+  if (i >= 0 && i < PRESENCE_COUNT) presence_enabled()[i] = enabled;
 }
 
 template<typename L> void fx_presence(L &it, bool init, float speed) {
@@ -1087,6 +1094,7 @@ template<typename L> void fx_presence(L &it, bool init, float speed) {
   int buf[H][W][3];
   memset(buf, 0, sizeof buf);
   for (int i = 0; i < PRESENCE_COUNT; i++) {
+    if (!presence_enabled()[i]) continue;
     const PresenceMember &m = PRESENCE[i];
     bool here = presence_home()[i];
     float target = here ? 1.0f : ABSENT_DIM, diff = target - bri[i], step = FADE * dt;

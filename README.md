@@ -47,8 +47,9 @@ The **Display** light has an effect list: *Word Clock*, *Weather*, *Presence*, a
 | **Hourly Display**, **Hourly Display Time**, **Play Hourly Display** | What is shown on the hour (Off / Random from pool / any animation / Weather / Presence) and for how long |
 | **Transition Animation**, **Transition Animation Time**, **Play Transition Animation** | Optional animation between time updates: Off (default) / Random / Sequential, and its length |
 | **Transition: \<animation\>** (13 switches, config category) | Which animations are in the pool |
+| **Presence: Dot 1–4** (switches, config category) | Enable/disable individual presence dots; disabled dots are fully dark |
 | **Effect Speed** | 5–100; 50 = exactly the Pi's pace |
-| **Group**, **Next Mode**, **Next Group** | Navigation (same groups and order as the Pi controller) |
+| **Group**, **Next Mode**, **Next Group** | Choose Info or Animations, or navigate to the next mode/group |
 | **Slideshow** + **Slideshow Interval** | Advances within the current group (default 30 s) |
 | **Auto Brightness** | Pi schedule: night 23–05 → 15 %, evening 19–08 → 40 %, day 100 % |
 | **Night/Evening Brightness / Starts / Ends** | Every number of that schedule is adjustable (config category) |
@@ -59,7 +60,7 @@ Settings are restored after a reboot.
 
 ### Modes
 
-* **Current**: Word Clock, Weather, Presence
+* **Info**: Word Clock, Weather, Presence
 * **Animations**: Matrix Rain, Ripple, Fire, Plasma, Sand, Lava Lamp, Bouncing Balls, Game of Life, Flow Field, Spiral, Flags, Lightning, Heart
 * **Games** (Tetris, Snake, Othello, Chess, Connect Four, Lights Out): *not ported yet*
 
@@ -80,7 +81,8 @@ Both are driven by the Word Clock effect, so they only play while it is the acti
 
 * **Weather** uses the `weather_entity` (plus `sun.sun` for day/night icons) instead of the Open-Meteo call of the Pi code. Temperature must be in °C.
 * **Presence** replaces the Pi's ping thread: a member is present when its entity (`person.*`, `device_tracker.*`, `binary_sensor.*`) is `home`/`on`.
-  The four dot positions and colours are in `components/wordclock/wc_effects.h` (`PRESENCE[]`, the Pi's `FAMILY_MEMBERS`).
+  The four dot positions and colours are in `components/wordclock/wc_effects.h` (`PRESENCE[]`, the Pi's `FAMILY_MEMBERS`). Toggle **Presence: Dot 1–4**
+  in Home Assistant to disable unused dots; all four are enabled by default and the setting is restored after reboot.
 
 ## Customising the code
 

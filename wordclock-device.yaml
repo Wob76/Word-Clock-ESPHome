@@ -11,7 +11,7 @@ substitutions:
   name: wordclock
   friendly_name: Word Clock
   # led_pin: GPIO13
-  timezone: Australia/Sydney            # fallback only; Home Assistant pushes its own timezone
+  timezone: Australia/Sydney          # fallback only; Home Assistant pushes its own timezone
 
   weather_entity: weather.home        # any weather.* entity (temperature in deg C)
   sun_entity: sun.sun

@@ -117,7 +117,7 @@ light:
     gamma_correct: 1.0       # the Pi code writes raw RGB (e.g. Fire applies its own gamma) - keep it linear
     restore_mode: RESTORE_DEFAULT_ON
     effects:
-      # ---- Group "Current" ----
+      # ---- Group "Info" ----
       - addressable_lambda:
           name: "Word Clock"
           update_interval: 30ms
@@ -380,9 +380,9 @@ select:
     id: group_sel
     icon: mdi:folder-multiple
     options:
-      - "Current"
+      - "Info"
       - "Animations"
-    initial_option: "Current"
+    initial_option: "Info"
     optimistic: true
     on_value:
       then:
@@ -644,6 +644,54 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     entity_category: config
+
+  - platform: template
+    name: "Presence: Dot 1"
+    id: presence_1_enabled
+    icon: mdi:account-check
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    turn_on_action:
+      - lambda: wc::presence_enable(0, true);
+    turn_off_action:
+      - lambda: wc::presence_enable(0, false);
+
+  - platform: template
+    name: "Presence: Dot 2"
+    id: presence_2_enabled
+    icon: mdi:account-check
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    turn_on_action:
+      - lambda: wc::presence_enable(1, true);
+    turn_off_action:
+      - lambda: wc::presence_enable(1, false);
+
+  - platform: template
+    name: "Presence: Dot 3"
+    id: presence_3_enabled
+    icon: mdi:account-check
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    turn_on_action:
+      - lambda: wc::presence_enable(2, true);
+    turn_off_action:
+      - lambda: wc::presence_enable(2, false);
+
+  - platform: template
+    name: "Presence: Dot 4"
+    id: presence_4_enabled
+    icon: mdi:account-check
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    turn_on_action:
+      - lambda: wc::presence_enable(3, true);
+    turn_off_action:
+      - lambda: wc::presence_enable(3, false);
 
   - platform: template
     name: "Slideshow"
