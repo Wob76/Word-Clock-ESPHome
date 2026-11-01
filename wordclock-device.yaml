@@ -21,7 +21,6 @@ substitutions:
   presence_4: person.person_4
 
   api_key: !secret api_encryption_key
-  ota_password: !secret ota_password
   wifi_ssid: !secret wifi_ssid
   wifi_password: !secret wifi_password
   ap_password: !secret fallback_ap_password

@@ -67,7 +67,7 @@ api:
 
 ota:
   - platform: esphome
-    password: ${ota_password}
+    encryption:
 
 wifi:
   ssid: ${wifi_ssid}
