@@ -1,0 +1,28 @@
+# Minimal per-device config: the whole clock (light, effects, Home Assistant
+# entities, C++) is pulled from GitHub. This is the only file you keep locally.
+#
+#   1. Copy this file into your ESPHome config folder (e.g. wordclock.yaml)
+#   2. Add the entries from secrets.example.yaml to your secrets.yaml
+#   3. Adjust the substitutions below, then install
+#
+# Anything you set here overrides the default in the repo's wordclock.yaml.
+
+substitutions:
+  name: wordclock
+  friendly_name: Word Clock
+  # led_pin: GPIO13
+  timezone: Europe/Warsaw             # fallback only; Home Assistant pushes its own timezone
+
+  weather_entity: weather.home        # any weather.* entity (temperature in deg C)
+  sun_entity: sun.sun
+  presence_1: person.person_1         # the 4 dots of the Presence display
+  presence_2: person.person_2
+  presence_3: person.person_3
+  presence_4: person.person_4
+
+packages:
+  wordclock:
+    url: https://github.com/Wob76/Word-Clock-ESPHome
+    ref: main                         # or a tag/commit to pin a version
+    files: [wordclock.yaml]
+    refresh: 1d                       # how often ESPHome re-checks GitHub for updates

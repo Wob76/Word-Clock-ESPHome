@@ -1,0 +1,768 @@
+# ============================================================================
+#  Word Clock - ESPHome port of johniak/word-clock (ESP32) + the
+#  Crossbow78/word_clock controller (animations, groups, slideshow, brightness)
+#
+#  Hardware (unchanged from the PlatformIO build):
+#    ESP32 DOIT DevKit V1, 12x11 WS2812 matrix (132 LEDs, GRB) on GPIO13
+#
+#  Everything configurable shows up in Home Assistant as entities of the
+#  "Word Clock" device - see README.md for the list.
+# ============================================================================
+
+substitutions:
+  name: wordclock
+  friendly_name: Word Clock
+  led_pin: GPIO13            # LED_PIN 13 in the original config.h
+  timezone: Europe/Warsaw    # fallback only - Home Assistant pushes its own timezone when connected
+
+  # ---- Home Assistant entities that feed the Weather and Presence modes ----
+  weather_entity: weather.home          # any weather.* entity (temperature must be in deg C)
+  sun_entity: sun.sun                   # used to pick sun vs. night icons
+  presence_1: person.person_1           # the 4 members = the 4 dots in wc_effects.h PRESENCE[]
+  presence_2: person.person_2           # (person.*, device_tracker.* or binary_sensor.* all work)
+  presence_3: person.person_3
+  presence_4: person.person_4
+
+  # Brightness for every write: schedule x fade-in (see Settings below)
+  dimprep: "float k = id(dim_scale) * wc::fade_ramp(initial_run, id(fade_secs).state); auto d = wc::dim(it, k);"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    priority: -100
+    then:
+      # First boot (or a plain solid colour restored): start on the word clock
+      - lambda: |-
+          if (id(matrix).remote_values.is_on() && id(matrix).get_effect_name() == "None") {
+            auto call = id(matrix).make_call();
+            call.set_effect("Word Clock");
+            call.perform();
+          }
+
+# The C++ (word clock engine + animations) is pulled from GitHub at build time,
+# so this YAML is the only file you need in your esphome folder.
+# To pin a release, change `ref: main` to a tag or commit (also in the packages
+# line of examples/wordclock-device.yaml if you use that).
+external_components:
+  - source:
+      type: git
+      url: https://github.com/Wob76/Word-Clock-ESPHome
+      ref: main
+    components: [wordclock]
+    refresh: 1d
+
+wordclock:
+
+esp32:
+  board: esp32doit-devkit-v1
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # If the clock can't join your WiFi it opens its own hotspot for setup
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+# ---------------------------------------------------------------- Time ------
+# Replaces NetworkManager::syncTimeWithNTP(). HA provides time + timezone;
+# SNTP is a fallback so the clock still syncs if HA is down at boot.
+time:
+  - platform: homeassistant
+    id: clock_time
+  - platform: sntp
+    id: sntp_time
+    timezone: ${timezone}
+    servers:
+      - pool.ntp.org
+      - time.cloudflare.com
+
+# ---------------------------------------------------------- Shared state ----
+globals:
+  - id: trigger_anim         # HA buttons: 1 = play the hourly display now, 2 = play a transition animation now
+    type: int
+    initial_value: "0"
+  - id: dim_scale            # time-of-day brightness factor, updated every 2 s
+    type: float
+    initial_value: "1.0"
+  - id: slide_elapsed        # slideshow: seconds on the current mode
+    type: int
+    initial_value: "0"
+
+# ------------------------------------------------------------- The LEDs -----
+light:
+  - platform: esp32_rmt_led_strip
+    id: matrix
+    name: "Display"
+    pin: ${led_pin}
+    num_leds: 132
+    chipset: WS2812
+    rgb_order: GRB
+    default_transition_length: 0s
+    gamma_correct: 1.0       # the Pi code writes raw RGB (e.g. Fire applies its own gamma) - keep it linear
+    restore_mode: RESTORE_DEFAULT_ON
+    effects:
+      # ---- Group "Current" ----
+      - addressable_lambda:
+          name: "Word Clock"
+          update_interval: 30ms
+          lambda: |-
+            ${dimprep}
+            wc::ClockCfg cfg;
+            cfg.color_mode = (int) id(time_color_mode).active_index().value_or(1);
+            cfg.hourly_choice = (int) id(hourly_choice).active_index().value_or(0);
+            cfg.hourly_secs = id(hourly_secs).state;
+            cfg.trans_mode = (int) id(transition_mode).active_index().value_or(0);
+            cfg.trans_secs = id(transition_secs).state;
+            cfg.speed = id(fx_speed).state;
+            cfg.fade_secs = id(fade_secs).state;
+            cfg.pool = (id(pool_matrix_rain).state ? 1u << 0 : 0u) |
+                       (id(pool_ripple).state ? 1u << 1 : 0u) |
+                       (id(pool_fire).state ? 1u << 2 : 0u) |
+                       (id(pool_plasma).state ? 1u << 3 : 0u) |
+                       (id(pool_sand).state ? 1u << 4 : 0u) |
+                       (id(pool_lava_lamp).state ? 1u << 5 : 0u) |
+                       (id(pool_bouncing_balls).state ? 1u << 6 : 0u) |
+                       (id(pool_game_of_life).state ? 1u << 7 : 0u) |
+                       (id(pool_flow_field).state ? 1u << 8 : 0u) |
+                       (id(pool_spiral).state ? 1u << 9 : 0u) |
+                       (id(pool_flags).state ? 1u << 10 : 0u) |
+                       (id(pool_lightning).state ? 1u << 11 : 0u) |
+                       (id(pool_heart).state ? 1u << 12 : 0u);
+            wc::fx_clock(d, current_color, initial_run, id(clock_time).now(), cfg, id(trigger_anim), k);
+      - addressable_lambda:
+          name: "Weather"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_weather(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Presence"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_presence(d, initial_run, id(fx_speed).state);
+
+      # ---- Group "Animations" (names = wc::G_ANIMS in wordclock.h) ----
+      - addressable_lambda:
+          name: "Matrix Rain"
+          update_interval: 60ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_matrix(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Ripple"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_ripple(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Fire"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_fire(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Plasma"
+          update_interval: 40ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_plasma(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Sand"
+          update_interval: 40ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_sand(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Lava Lamp"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_lavalamp(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Bouncing Balls"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_balls(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Game of Life"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_life(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Flow Field"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_flowfield(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Spiral"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_spiral(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Flags"
+          update_interval: 40ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_flags(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Lightning"
+          update_interval: 30ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_lightning(d, initial_run, id(fx_speed).state);
+      - addressable_lambda:
+          name: "Heart"
+          update_interval: 50ms
+          lambda: |-
+            ${dimprep}
+            wc::fx_heart(d, initial_run, id(fx_speed).state);
+
+# ----------------------------------------------- Home Assistant -> display --
+# Weather: condition + temperature come from a HA weather entity (replaces the
+# Open-Meteo HTTP fetch in weather.py)
+text_sensor:
+  - platform: homeassistant
+    id: ha_weather_condition
+    entity_id: ${weather_entity}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            wc::weather_set(x, wc::weather().is_day);
+  - platform: homeassistant
+    id: ha_sun
+    entity_id: ${sun_entity}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            wc::weather_set(wc::weather().condition, x == "above_horizon");
+
+  # Presence: replaces the ping3 thread in presence.py
+  - platform: homeassistant
+    id: ha_presence_1
+    entity_id: ${presence_1}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            wc::presence_set(0, x == "home" || x == "on");
+  - platform: homeassistant
+    id: ha_presence_2
+    entity_id: ${presence_2}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            wc::presence_set(1, x == "home" || x == "on");
+  - platform: homeassistant
+    id: ha_presence_3
+    entity_id: ${presence_3}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            wc::presence_set(2, x == "home" || x == "on");
+  - platform: homeassistant
+    id: ha_presence_4
+    entity_id: ${presence_4}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            wc::presence_set(3, x == "home" || x == "on");
+
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+
+sensor:
+  - platform: homeassistant
+    id: ha_weather_temp
+    entity_id: ${weather_entity}
+    attribute: temperature
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            wc::weather().temp = x;
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    entity_category: diagnostic
+  - platform: uptime
+    name: "Uptime"
+    entity_category: diagnostic
+
+# -------------------------------------------- Settings exposed to HA --------
+select:
+  - platform: template
+    name: "Time Colour Mode"
+    id: time_color_mode
+    icon: mdi:palette
+    options:
+      - "Random per word"      # ESP32 firmware: independent random colour per word
+      - "Shuffled palette"     # Pi controller: shuffled palette, no repeated colours
+      - "Light colour"         # use the colour set on the Display light
+      - "Rainbow"
+    initial_option: "Shuffled palette"
+    optimistic: true
+    restore_value: true
+
+  # What is shown on the hour (replaces the transition animation at :00).
+  # "Random from pool" draws from the enabled "Transition: ..." switches below.
+  - platform: template
+    name: "Hourly Display"
+    id: hourly_choice
+    icon: mdi:clock-star-four-points
+    options:
+      - "Off"
+      - "Random from pool"
+      - "Matrix Rain"
+      - "Ripple"
+      - "Fire"
+      - "Plasma"
+      - "Sand"
+      - "Lava Lamp"
+      - "Bouncing Balls"
+      - "Game of Life"
+      - "Flow Field"
+      - "Spiral"
+      - "Flags"
+      - "Lightning"
+      - "Heart"
+      - "Weather"
+      - "Presence"
+    initial_option: "Heart"        # what the original ESP32 firmware did
+    optimistic: true
+    restore_value: true
+
+  # Animation played every time the time on the clock changes (every 5 minutes).
+  # Opt-in: off until you pick Random or Sequential.
+  - platform: template
+    name: "Transition Animation"
+    id: transition_mode
+    icon: mdi:animation-play
+    options:
+      - "Off"
+      - "Random"               # random enabled animation, never the same one twice in a row
+      - "Sequential"           # step through the enabled animations in order
+    initial_option: "Off"
+    optimistic: true
+    restore_value: true
+
+  # Mirrors the Pi button's "long press = next group". Changing it jumps to that
+  # group's last-used mode; it also follows whatever effect is running.
+  - platform: template
+    name: "Group"
+    id: group_sel
+    icon: mdi:folder-multiple
+    options:
+      - "Current"
+      - "Animations"
+    initial_option: "Current"
+    optimistic: true
+    on_value:
+      then:
+        - lambda: |-
+            int g = 0;
+            for (int i = 0; i < wc::GROUP_COUNT; i++) if (x == wc::GROUP_NAMES[i]) g = i;
+            int cg, ci;
+            wc::find_mode(id(matrix).get_effect_name(), cg, ci);
+            if (cg == g) return;
+            auto call = id(matrix).make_call();
+            call.set_state(true);
+            call.set_effect(std::string(wc::group_mode(g)));
+            call.perform();
+
+number:
+  - platform: template
+    name: "Effect Speed"
+    id: fx_speed
+    icon: mdi:speedometer
+    mode: slider
+    min_value: 5
+    max_value: 100
+    step: 1
+    initial_value: 50          # 50 = same pace as the Pi controller
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    name: "Transition Fade"
+    id: fade_secs
+    icon: mdi:blur
+    unit_of_measurement: s
+    mode: box
+    min_value: 0
+    max_value: 3
+    step: 0.05
+    initial_value: 0.35        # controller.py fades 16 steps x 20 ms
+    optimistic: true
+    restore_value: true
+    entity_category: config
+
+  - platform: template
+    name: "Transition Animation Time"
+    id: transition_secs
+    icon: mdi:timer-outline
+    unit_of_measurement: s
+    mode: box
+    min_value: 1
+    max_value: 60
+    step: 1
+    initial_value: 5
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    name: "Hourly Display Time"
+    id: hourly_secs
+    icon: mdi:timer-star-outline
+    unit_of_measurement: s
+    mode: box
+    min_value: 1
+    max_value: 120
+    step: 1
+    initial_value: 6           # the original played the heart for 4 s; Weather/Presence read better a bit longer
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    name: "Slideshow Interval"
+    id: slide_interval
+    icon: mdi:timer-sand
+    unit_of_measurement: s
+    mode: box
+    min_value: 1
+    max_value: 3600
+    step: 1
+    initial_value: 30          # SLIDESHOW_INTERVAL = 30
+    optimistic: true
+    restore_value: true
+
+  # ---- Auto brightness schedule (controller.py _time_brightness) ----
+  - platform: template
+    name: "Night Brightness"
+    id: night_level
+    icon: mdi:weather-night
+    unit_of_measurement: "%"
+    mode: slider
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 15
+    optimistic: true
+    restore_value: true
+    entity_category: config
+  - platform: template
+    name: "Night Starts (hour)"
+    id: night_start
+    unit_of_measurement: h
+    mode: box
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 23
+    optimistic: true
+    restore_value: true
+    entity_category: config
+  - platform: template
+    name: "Night Ends (hour)"
+    id: night_end
+    unit_of_measurement: h
+    mode: box
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 5
+    optimistic: true
+    restore_value: true
+    entity_category: config
+  - platform: template
+    name: "Evening Brightness"
+    id: eve_level
+    icon: mdi:weather-sunset
+    unit_of_measurement: "%"
+    mode: slider
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 40
+    optimistic: true
+    restore_value: true
+    entity_category: config
+  - platform: template
+    name: "Evening Starts (hour)"
+    id: eve_start
+    unit_of_measurement: h
+    mode: box
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 19
+    optimistic: true
+    restore_value: true
+    entity_category: config
+  - platform: template
+    name: "Evening Ends (hour)"
+    id: eve_end
+    unit_of_measurement: h
+    mode: box
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 8
+    optimistic: true
+    restore_value: true
+    entity_category: config
+
+switch:
+  # ---- Which animations may play between time updates (and in 'Random from pool') ----
+  - platform: template
+    name: "Transition: Matrix Rain"
+    id: pool_matrix_rain
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Ripple"
+    id: pool_ripple
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Fire"
+    id: pool_fire
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Plasma"
+    id: pool_plasma
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Sand"
+    id: pool_sand
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Lava Lamp"
+    id: pool_lava_lamp
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Bouncing Balls"
+    id: pool_bouncing_balls
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Game of Life"
+    id: pool_game_of_life
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Flow Field"
+    id: pool_flow_field
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Spiral"
+    id: pool_spiral
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Flags"
+    id: pool_flags
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Lightning"
+    id: pool_lightning
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Transition: Heart"
+    id: pool_heart
+    icon: mdi:animation
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Slideshow"
+    id: slideshow
+    icon: mdi:play-box-multiple
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: template
+    name: "Auto Brightness"
+    id: auto_brightness
+    icon: mdi:brightness-auto
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+script:
+  # Pi button: single press (also cancels the slideshow)
+  - id: go_next_mode
+    then:
+      - switch.turn_off: slideshow
+      - lambda: |-
+          auto call = id(matrix).make_call();
+          call.set_state(true);
+          call.set_effect(std::string(wc::next_mode(id(matrix).get_effect_name())));
+          call.perform();
+  # Pi button: long press
+  - id: go_next_group
+    then:
+      - lambda: |-
+          id(slide_elapsed) = 0;
+          auto call = id(matrix).make_call();
+          call.set_state(true);
+          call.set_effect(std::string(wc::next_group_mode(id(matrix).get_effect_name())));
+          call.perform();
+
+button:
+  - platform: template
+    name: "Next Mode"
+    icon: mdi:skip-next
+    on_press:
+      - script.execute: go_next_mode
+  - platform: template
+    name: "Next Group"
+    icon: mdi:skip-forward
+    on_press:
+      - script.execute: go_next_group
+  - platform: template
+    name: "Play Hourly Display"
+    icon: mdi:play
+    on_press:
+      - light.turn_on:
+          id: matrix
+          effect: "Word Clock"
+      - lambda: |-
+          id(trigger_anim) = 1;
+  - platform: template
+    name: "Play Transition Animation"
+    icon: mdi:play-outline
+    on_press:
+      - light.turn_on:
+          id: matrix
+          effect: "Word Clock"
+      - lambda: |-
+          id(trigger_anim) = 2;
+  - platform: restart
+    name: "Restart"
+    entity_category: diagnostic
+
+interval:
+  # Time-of-day brightness (Pi: night 23-05 -> 15 %, evening 19-08 -> 40 %, else 100 %)
+  - interval: 2s
+    then:
+      - lambda: |-
+          auto t = id(clock_time).now();
+          if (!id(auto_brightness).state || !t.is_valid()) { id(dim_scale) = 1.0f; return; }
+          id(dim_scale) = wc::schedule_scale(t.hour, (int) id(night_start).state, (int) id(night_end).state,
+                                             (int) id(eve_start).state, (int) id(eve_end).state,
+                                             id(night_level).state / 100.0f, id(eve_level).state / 100.0f);
+  # Slideshow + keep the Group select in sync with the running effect
+  - interval: 1s
+    then:
+      - lambda: |-
+          std::string cur = id(matrix).get_effect_name();
+          int g = wc::note_mode(cur);
+          if (g >= 0 && id(group_sel).state != wc::GROUP_NAMES[g]) id(group_sel).publish_state(std::string(wc::GROUP_NAMES[g]));
+          if (!id(slideshow).state || !id(matrix).remote_values.is_on()) { id(slide_elapsed) = 0; return; }
+          if (++id(slide_elapsed) < (int) id(slide_interval).state) return;
+          id(slide_elapsed) = 0;
+          auto call = id(matrix).make_call();
+          call.set_state(true);
+          call.set_effect(std::string(wc::next_mode(cur)));
+          call.perform();
+
+# ------------------------------------------------- Optional hardware button --
+# Same gestures as controller.py (it used GPIO17 on the Pi). Not in the ESP32
+# build - uncomment and wire a momentary switch between GPIO27 and GND.
+# binary_sensor:
+#   - platform: gpio
+#     pin:
+#       number: GPIO27
+#       mode: INPUT_PULLUP
+#       inverted: true
+#     name: "Button"
+#     filters:
+#       - delayed_on_off: 50ms
+#     on_multi_click:
+#       - timing:                    # double press -> toggle slideshow
+#           - ON for at most 0.8s
+#           - OFF for at most 0.35s
+#           - ON for at most 0.8s
+#           - OFF for at least 0.2s
+#         then:
+#           - switch.toggle: slideshow
+#       - timing:                    # single press -> next mode
+#           - ON for at most 0.8s
+#           - OFF for at least 0.35s
+#         then:
+#           - script.execute: go_next_mode
+#       - timing:                    # long press -> next group
+#           - ON for at least 0.8s
+#         then:
+#           - script.execute: go_next_group
