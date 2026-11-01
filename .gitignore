@@ -1,0 +1,5 @@
+# ESPHome build cache and your real secrets
+.esphome/
+secrets.yaml
+__pycache__/
+*.pyc

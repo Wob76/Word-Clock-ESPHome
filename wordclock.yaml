@@ -2,8 +2,8 @@
 #  Word Clock - ESPHome port of johniak/word-clock (ESP32) + the
 #  Crossbow78/word_clock controller (animations, groups, slideshow, brightness)
 #
-#  Hardware (unchanged from the PlatformIO build):
-#    ESP32 DOIT DevKit V1, 12x11 WS2812 matrix (132 LEDs, GRB) on GPIO13
+#  Hardware:
+#    ESP32-S3 SuperMini, 12x11 WS2812 matrix (132 LEDs, GRB) on GPIO13
 #
 #  Everything configurable shows up in Home Assistant as entities of the
 #  "Word Clock" device - see README.md for the list.
@@ -13,7 +13,7 @@ substitutions:
   name: wordclock
   friendly_name: Word Clock
   led_pin: GPIO13            # LED_PIN 13 in the original config.h
-  timezone: Europe/Warsaw    # fallback only - Home Assistant pushes its own timezone when connected
+  timezone: Australia/Sydney    # fallback only - Home Assistant pushes its own timezone when connected
 
   # ---- Home Assistant entities that feed the Weather and Presence modes ----
   weather_entity: weather.home          # any weather.* entity (temperature must be in deg C)
@@ -55,7 +55,7 @@ external_components:
 wordclock:
 
 esp32:
-  board: esp32doit-devkit-v1
+  variant: esp32s3
   framework:
     type: esp-idf
 
@@ -63,19 +63,19 @@ logger:
 
 api:
   encryption:
-    key: !secret api_key
+    key: ${api_key}
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    password: ${ota_password}
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  ssid: ${wifi_ssid}
+  password: ${wifi_password}
   # If the clock can't join your WiFi it opens its own hotspot for setup
   ap:
     ssid: "${friendly_name} Fallback"
-    password: !secret ap_password
+    password: ${ap_password}
 
 captive_portal:
 

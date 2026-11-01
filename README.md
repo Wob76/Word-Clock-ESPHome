@@ -1,6 +1,6 @@
 # Word Clock for ESPHome
 
-ESPHome firmware for a 12×11 WS2812 word clock (ESP32), controlled entirely from Home Assistant.
+ESPHome firmware for a 12×11 WS2812 word clock (ESP32-S3 SuperMini), controlled entirely from Home Assistant.
 It is an ESPHome port of [johniak/word-clock](https://github.com/johniak/word-clock) (ESP32 build), merged with the animations,
 weather, presence, groups, slideshow and time-of-day brightness of the
 [Crossbow78/word_clock](https://github.com/Crossbow78/word_clock) Pi controller.
@@ -11,18 +11,25 @@ weather, presence, groups, slideshow and time-of-day brightness of the
 
 ### Option A – minimal file (recommended)
 
-1. Copy [`examples/wordclock-device.yaml`](examples/wordclock-device.yaml) into your ESPHome config folder (e.g. as `wordclock.yaml`).
+1. Copy [`wordclock-device.yaml`](wordclock-device.yaml) into your ESPHome config folder (e.g. as `wordclock.yaml`).
 2. Add the entries from [`secrets.example.yaml`](secrets.example.yaml) to your `secrets.yaml`.
 3. Edit the `substitutions:` at the top (name, timezone, your weather entity, the four presence entities).
 4. First flash over USB (`esphome run wordclock.yaml`, or *Install* in the ESPHome dashboard). OTA after that.
    Home Assistant discovers the device automatically.
 
 The whole config is pulled with ESPHome `packages`; anything you put in your file (substitutions, or any extra YAML) overrides the repo's defaults.
+The package uses substitutions for credentials because ESPHome remote packages cannot resolve `!secret` themselves; the local file maps those values to your `secrets.yaml`.
+ESPHome fetches `wordclock.yaml` and `components/wordclock` from the repository; it does not fetch or unpack `Word-Clock-ESPHome.zip`.
 
 ### Option B – one full file
 
-Copy [`wordclock.yaml`](wordclock.yaml) instead and edit it directly. It still fetches the C++ from this repo through `external_components`,
-so it needs no other files either.
+Copy [`wordclock.yaml`](wordclock.yaml) instead and edit it directly. It still fetches the C++ from this repo through `external_components`.
+Because it is also the remotely fetched package, its credentials are substitutions rather than `!secret` lookups; when using it as a standalone
+config, add `api_key`, `ota_password`, `wifi_ssid`, `wifi_password` and `ap_password` under `substitutions:` and set each to its corresponding
+`!secret` value.
+
+Both configs select `variant: esp32s3` and ESP-IDF, which is the recommended ESPHome configuration for the ESP32-S3 SuperMini. The external LED data
+pin remains GPIO13; change `led_pin` in your local substitutions if your wiring uses another pin.
 
 ### Updating and pinning
 
@@ -88,7 +95,7 @@ Both are driven by the Word Clock effect, so they only play while it is the acti
 
 ```
 wordclock.yaml                    full device config (light, effects, HA entities)
-examples/wordclock-device.yaml    minimal per-device file using packages
+wordclock-device.yaml             minimal per-device file using packages
 secrets.example.yaml
 components/wordclock/             header-only ESPHome component (fetched at build time)
   __init__.py  wordclock.h  wc_effects.h  heart_anim.h
