@@ -51,6 +51,7 @@ The **Display** light has an effect list: *Word Clock*, *Weather*, *Presence*, a
 | **Effect Speed** | 5–100; 50 = exactly the Pi's pace |
 | **Group**, **Next Mode**, **Next Group** | Choose Info or Animations, or navigate to the next mode/group |
 | **Slideshow** + **Slideshow Interval** | Advances within the current group (default 30 s) |
+| **Time**, **Weather**, **Quick Display Time** | Temporarily show the time or weather, then return to the previous display; duration is adjustable (default 10 s) |
 | **Auto Brightness** | Pi schedule: night 23–05 → 15 %, evening 19–08 → 40 %, day 100 % |
 | **Night/Evening Brightness / Starts / Ends** | Every number of that schedule is adjustable (config category) |
 | **Transition Fade** | Fade in/out around animations and mode changes |

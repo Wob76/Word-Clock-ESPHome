@@ -103,6 +103,15 @@ globals:
   - id: slide_elapsed        # slideshow: seconds on the current mode
     type: int
     initial_value: "0"
+  - id: temporary_view_active
+    type: bool
+    initial_value: "false"
+  - id: temporary_view_effect
+    type: std::string
+    initial_value: '""'
+  - id: temporary_view_was_on
+    type: bool
+    initial_value: "false"
 
 # ------------------------------------------------------------- The LEDs -----
 light:
@@ -463,6 +472,19 @@ number:
     optimistic: true
     restore_value: true
 
+  - platform: template
+    name: "Quick Display Time"
+    id: quick_display_secs
+    icon: mdi:timer-outline
+    unit_of_measurement: s
+    mode: box
+    min_value: 1
+    max_value: 3600
+    step: 1
+    initial_value: 10
+    optimistic: true
+    restore_value: true
+
   # ---- Auto brightness schedule (controller.py _time_brightness) ----
   - platform: template
     name: "Night Brightness"
@@ -708,6 +730,30 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
 
 script:
+  - id: show_temporary_effect
+    mode: restart
+    parameters:
+      effect_name: string
+    then:
+      - lambda: |-
+          if (!id(temporary_view_active)) {
+            id(temporary_view_effect) = id(matrix).get_effect_name();
+            id(temporary_view_was_on) = id(matrix).remote_values.is_on();
+            id(temporary_view_active) = true;
+          }
+          auto call = id(matrix).make_call();
+          call.set_state(true);
+          call.set_effect(effect_name);
+          call.perform();
+      - delay: !lambda |-
+          return (uint32_t)(id(quick_display_secs).state * 1000.0f);
+      - lambda: |-
+          auto call = id(matrix).make_call();
+          call.set_state(id(temporary_view_was_on));
+          call.set_effect(id(temporary_view_effect));
+          call.perform();
+          id(temporary_view_active) = false;
+
   # Pi button: single press (also cancels the slideshow)
   - id: go_next_mode
     then:
@@ -756,6 +802,20 @@ button:
           effect: "Word Clock"
       - lambda: |-
           id(trigger_anim) = 2;
+  - platform: template
+    name: "Time"
+    icon: mdi:clock-outline
+    on_press:
+      - script.execute:
+          id: show_temporary_effect
+          effect_name: "Word Clock"
+  - platform: template
+    name: "Weather"
+    icon: mdi:weather-partly-cloudy
+    on_press:
+      - script.execute:
+          id: show_temporary_effect
+          effect_name: "Weather"
   - platform: restart
     name: "Restart"
     entity_category: diagnostic
@@ -776,8 +836,9 @@ interval:
       - lambda: |-
           std::string cur = id(matrix).get_effect_name();
           int g = wc::note_mode(cur);
-          if (g >= 0 && id(group_sel).current_option() != wc::GROUP_NAMES[g]) id(group_sel).publish_state(std::string(wc::GROUP_NAMES[g]));
+          if (!id(temporary_view_active) && g >= 0 && id(group_sel).current_option() != wc::GROUP_NAMES[g]) id(group_sel).publish_state(std::string(wc::GROUP_NAMES[g]));
           if (!id(slideshow).state || !id(matrix).remote_values.is_on()) { id(slide_elapsed) = 0; return; }
+          if (id(temporary_view_active)) return;
           if (++id(slide_elapsed) < (int) id(slide_interval).state) return;
           id(slide_elapsed) = 0;
           auto call = id(matrix).make_call();
